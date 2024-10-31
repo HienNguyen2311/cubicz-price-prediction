@@ -1,0 +1,707 @@
+---
+title: "DATA 473 Project Report"
+author: "Hien Nguyen, 300199540"
+date: "18 June 2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction
+
+The chosen dataset for my project is dataset 1, which involves predicting cubic zirconia's prices, analyzing the data to provide more insights, with a particular focus on which predictor has a more significant impact over the response variable ``price`` and how a change in those predictors affect the price change.
+
+In order to build a model that satisfies the above requirements, methods such as Linear Regression and Generalized Additive Model (GAM) will be performed. However, before we can decide which model is best, some data analyzing steps will need to be taken. Detailed graphs such as those in the EDA, the Residuals vs Fitted plot, the Q-Q plot, the Scale-Location plot, the Residuals vs Leverage plot, those plots representing response-predictor relationship, and those acquired during the GAM check process, will all be included. Additionally, R-squared, adjusted R-squared, global usefulness test, hypothesis test, and other methods to check regression assumptions will also be closely examined. A factor that would help to get a better understanding of the price such as interaction, will also be investigated. Finally, for the model selection stage, methods such as AIC, BIC, and Mallow's Cp will be used to determine which model we can use to go forward with.
+
+Regarding the prediction model, it is essential to use cross-validation with best subset selection to avoid over-fitting, hence achieve a better result in predicting the cubic zirconia's prices. However, other popular methods such as Ridge regression and LASSO will also compare the result with the best subset selection method.
+
+The whole process will be accompanied by an interpretation of the results. Finally, this data analysis process will decide what course of action would need to be taken to increase profit and other related studies will also be discussed.
+
+# Data description, exploratory data analysis (EDA) and methods
+
+Looking at the data structure and summary drawn from the function ``str`` and ``summary``, we can tell that there are 7 numeric variables and 3 categorical variables that we will need to change to factors. However, there are 697 NA in the dataset. According to a well-known rule of thumb, if the percentage missing is low, less than 5%, then removing them would not affect our statistical analysis. Therefore I chose to remove NA from the dataset altogether.
+
+The insight taken from the EDA in Appendix 2 is as below:
+ 
+* Price is right-skewed; thus, log transformation is considered.
+* Based on the correlation coefficient, the strongest predictors of price are carat, x, y, and z - a variable selection procedure should be implemented.
+* There are strong correlations between some pairs of predictors - multicollinearity should be investigated.
+* Price increases when carat decrease.
+* There is potential non-linearity in the relationship between price and each of the numerical predictors. Polynomial or smooth spline regression should be considered.
+* According to the boxplot of ``cut``, the Premium cut has the highest average price. Though Ideal cut is the best cut, it has the lowest average price. Meanwhile, Fair cut has the second-highest average price, despite being the worse cut out of 5 categories. Additionally, the difference between fair and premium cut is also very small. This is not very intuitive, a closer look at the category is necessary.
+* The boxplot for ``color`` and ``clarity`` represents the same issue as ``cut``, D is the best color and J is the worst,
+but J has the highest average price and D lowest. The best order for ``clarity`` is IF, VVS1, VVS2, VS1, VS2, SI1, SI2, I1. However, the price is increasing instead of decreasing.
+* The EDA does not tell us anything about the possible interactions between predictors, but these should be investigated.
+
+The first three tables in Appendix 2 examine the max, median, average, and min price of the three category variables. The median and average prices are distributed randomly between each sub-category and they have very similar min and max values. It is clear that price does not depend much on these features, this is somewhat reasonable because cubic zirconia is a man-made stone, produced in the lab and not like a diamond which is sourced from nature; therefore, 99% of them achieve good ``cut``, ``color`` and ``clarity``, and if there is any difference, it won't be visible to our naked eyes.
+
+The R-square (0.9208) and Adjusted-R square (0.9207) obtained from ``fit1`` linear model (Appendix 4) are very similar, suggesting that no predictor is redundant. Furthermore, to quantify our uncertainty about the corresponding population regression coefficients and to make sure our model has at least one non-zero coefficient, we test the global hypotheses:
+
+* H0: $\beta 1$=$\beta 2$= ... =$\beta p$ = 0
+* H1: at least one $\beta j$ = 0
+
+According to Model Assessment Summary table, We find F = 13263 with 23 and 26246 d.o.f and p−value < 2.2e-16. There is very strong evidence to reject H0, and there is no evidence that all regression coefficients are zero in the population. It is worth going on further analyze and interpret a model of ``price`` against the predictors.
+
+The plot in Appendix 5 shows that there is evidence of non-linearity, non-normality, and non-constant variance with one influential observation #25796. Log transformation of the response is used to help with assumptions violation.
+
+After another check of Residuals vs Leverage plot, there are still some influential points such as #17507, #5822 and #25796, I decided to remove them because influential point is an outlier that dramatically affects the slope of the regression line and it will cause the coefficient of determination to be bigger, sometimes, smaller. As expected, after removing the three outliers, R-square and Adjusted R-squared both increase from 0.9207 to 0.9857. Since we changed the model, we need to check the Residuals vs Leverage plot again to see if it works. #17507, #5822, and #25796 are no longer appear outside of Cook's distance, however, there is still one influential point, so the same process is applied again. The new model is store in ``new_fit3``, and R-square and Adjusted R-squared increase from 0.9857 to 0.9883.
+
+We continue to use hypotheses test to check normality assumption:
+
+* H0: The sample comes from a normal distribution
+* H1: The sample does not come from a normal distribution
+
+The Shapiro-Wilk statistic does not work for a dataset with more than 5000 observations; therefore, only the first 5000 rows of ``new_cubiz2`` will be used for this test. Moreover, Anderson-Darling statistic is also included to perform the test on the whole dataset. The p-values from both tests are very small and very close to 0 (Appendix 5.1). As a result, H0 is rejected, and we conclude that the sample does not come from a normal distribution.
+
+On the other hand, the Breusch-Pagan statistic is used to test the hypotheses:
+
+* H0: Homoscedasticity is present
+* H1: Heteroscedasticity is present
+
+The Breusch-Pagan also reject the null hypotheses, confirming that the residuals are not distributed with equal variance.
+
+The original ``cubiz`` dataset does not have time series or spatial data, as such, autocorrelation is not violated.
+
+As shown in VIF Values table (Appendix 5.2), ``x``, ``y``, ``z`` have severe multicollinearity since their values of GVIFˆ(1/(2*Df)) are much more than 10. With ``x`` has a lower VIF score than ``y`` and ``z``, only ``x`` will be retained in the model. Though this change reduces R-square and Adjusted R-squared from 0.9883 to 0.9879, there is no more evidence of multicollinearity, the assumption is honored, and that is more important.
+
+Looking at the plot of residuals against each predictor in Appendix 6.1, we can see an indication of non-linear patterns in ``carat`` and ``x``. To identify suitable transformations, I plot ``log(price)`` against each of these two predictors (see plot "aa" for ``carat`` and "dd" for ``x``). The non-monotonic patterns in the plots of ``log(price)`` against each of ``carat`` and ``length (x)`` suggest polynomial transformations would be suitable for both predictors. Additionally, there is not many turning points, therefore, polynomial degree 2 should be sufficient. The transformations indeed increase R-square and Adjusted R-squared from 0.9879 to 0.9890.
+
+The Model Assumption plots in Appendix 6.2 indicate that the violation of assumptions has been significantly reduced. There is no influential point, and the plots show some sign of linearity and homoscedasticity. However, the q-q plot shows tails are heavier than in a normal distribution. There is still potential non-normality in the residuals. As a result, generalized additive model (GAM) is considered.
+
+Before fitting GAM, we could first explore interaction term. The bigger the size, the heavier the stone measured in carat, one possible interaction could be ``carat:x``. As represented in Appendix 6.2, when all other predictors are held constant, log(price) increases as the carat weight increases for those cubic zirconia stones with lengths in the range from 3 to 8mm. The stones with the shortest length 3mm have the highest log(price) (as ``carat`` increasing) indicated by the steepest slope and the slope gets less steep as ``carat`` increases and ``x`` reaches 8mm. On the contrary, log(price) decreases as the carat weight increases for stones with 9 to 10mm lengths. Furthermore, after checking ``fit6`` - the model with interaction, we can see that R-square and Adjusted R-squared raise from 0.9890 to 0.9891. This is a good sign, and interaction should be included.
+
+Based on the GAM model fitted in Appendix 6.4, we can conclude that all smooth terms for ``carat``, ``depth``, ``table`` and ``x`` are non-linear and significant, since their edf are bigger than 1 and p-values are close to 0.
+
+In the Appendix 6.4 plots, ``carat`` and ``x`` have the most wiggly curve and have the highest edf values of 7.9 and 8.9. For categorical predictors, the confidence interval of all the ``cut``, ``color``, and ``clarity`` types exclude zero, reflecting a statistically significant difference (at the 5% significance level) in log(price) between each reference level and its fellow sub-categories.
+
+Model-checking with ``gam.check()`` shows that the histogram is symmetric, but the q-q plot still shows that tails are heavier than the normal distribution. Therefore, there is potential non-normality in the residuals. The Resid vs linear pred plot also shows evidence of non-constant variance. Moreover, the k-index of ``depth`` and ``table`` are close to 1 and their edfs are not close to k’, so we could accept their current number of basis functions.
+However, ``carat`` and ``x`` are different, though their k-index are much lower than 1, their edf values are very close to k'. Hence, it is best to refit the model with higher k values to double-check these conclusions. After raising the k values from the default number (at k = 9) to k equal to 20, as expected, the number of basis functions increase significantly from 7.9 to 15.8 for ``carat`` and 8.9 to 17.5 for ``x``. On the other hand, the basis functions for ``depth`` and ``table`` only increase slightly. By setting the k value to 20, the residual diagnostic plots now show more sign of linearity, constant variance, and normality.
+
+When we start the model selection process, we denote the model that has the lowest AIC value with all predictors as model B and the model with the second smallest AIC value as model A (excludes ``table``). According to the rule of thumb, when the difference is larger than 10 (in this case, it is 79), we prefer model B, all predictors are retained. Additionally, BIC and Mallow's Cp also yield the same result as AIC (see Appendix 7.1, 7.2 and 7.3). As such, the chosen model in terms of AIC, BIC, and Mallow's Cp would have all eight predictors, ``carat``, ``cut``, ``color``, ``clarity``, ``depth``, ``table``, ``x`` and ``carat:x``.
+
+About model selection for GAM model ``fit.gam2``, p-values shown in the summary table are all very small and close to 0. This means that all predictors are significant in predicting the response. Similarly to linear model, GAM model should also include ``carat``, ``cut``, ``color``, ``clarity``, ``depth``, ``table``, ``x`` and ``carat:x`` (Appendix 7.4).
+
+The next question is whether we should use the linear model or the GAM model - in other words, does the additional complexity of the latter result in substantially improved fit. The comparison tables in Appendix 7.7 suggest that GAM model is the winner as it has much lower values for both AIC and BIC methods.
+
+Some prediction settings are represented in Appendix 9, such as best subset selection using cross-validation, Ridge regression, and LASSO regression. These methods aim to find the best prediction model with the lowest test MSE. LASSO gives the lowest test MSE of 822,217 (see Appendix 9.2 for the prediction coefficients).
+
+# Discussion and conclusion inference
+
+## Conclusion
+
+* Looking at the Linear models, we can see that the carat weight and the length have the most significant impact on price.
+* Looking at the GAM model, the reference level for cut is Fair, for color is D and for clarity is IF.
+* Cut Fair is the cheapest cut compared to other cut types, and D is the most expensive color compared to other color types. Meanwhile, clarity IF is the most expensive among other clarity types.
+* The biggest difference among these categorical variables is cut Fair versus cut Premium and Ideal; color D versus color G, H, I, J; and clarity IF versus VS1, VS2, SI1, SI2 and I1. Therefore, color D, E, F, clarity IF, VVS1, VVS2 and cut Premium, Ideal are the features that would bring more revenue. Producing stones with these features and focusing on marketing them will bring more profit to the company.
+* We expect the price to increase by a multiplicative factor of 0.15 (15%) for each Ideal cut stone and 0.11 (11%) for each Premium one, compared to each Fair one, while holding all other predictors constant.
+* We expect the price to decrease by a multiplicative factor of 0.6 (40%) for each color J stone and 0.85 (14%) for each with color G , compared to each with color D, while holding all other predictors constant.
+* We expect the price to decrease by a multiplicative factor of 0.35 (65%) for each I1 clarity stone and 0.76 (23%) for each VS1 graded one, compared to each IF graded one, while holding all other predictors constant.
+* We already knew that, log(price) increases as the carat weight increases for those cubic zirconia stones with length in the range from 3 to 8mm. Hence, the company should not prioritize any activity on any heavy and bigger stone than 8mm length. Instead, they should put their effort in smaller stone's lengths, especially those around 3, 4 and 5mm, as the more carat weight those stones get, the higher the log(price).
+
+## Discussion
+
+I found two analyses on this dataset. Each of them uses very different approach from mine and each other, though they both use Python instead of R.
+
+The first model was built by Sindiri (towardsdatascience.com, 2020), he has somewhat a similar process to mine, however, he focused mainly on the prediction model, performing the exploratory data analysis (EDA), preparing the dataset for training, creating a linear regression model, training the model to fit the data and finally, making predictions using the trained model. After analyzing the EDA, he concluded that ``x``, ``y`` and ``z`` have a strong correlation with ``price``, while ``depth`` has a very weak relation, thus he decided to drop this variable. He chose Pytorch library as his tool for building the prediction model. Hence, he needed to transform the data frame dataset to the Tensor dataset and then split them into training set and validation set. Furthermore, training set was used to train the model and tune the hyperparameters (learning rate, epochs, batch size). After all these hyperparameters were locked in, he used them to minimize the loss function and then used the final model to test the validation set.
+
+Muralidharan built the second model. His initial steps were very similar to mine and Sindiri's, such as examining the data by looking through the dataset structure, finding out the predictor's data types, and checking NA. Surprisingly their datasets do not have any NA. In particular, he went into great detail and examined each variable by using various chart types. His EDA was quite similar to the first one, they both used ``sns.pairplot`` and ``sns.heatmap``, while I combined both of them in one using ``pairs.panels``. Muralidharan also performed data scaling and looked for VIF values before and after scaling. He also removed outliers that appeared in each variable's boxplot. He then split the data into two (train and test dataset) and apply Linear Regression using Sklearn package. According to his model summary, ``depth`` has a p-value larger than significance level alpha equal to 0.05, ``depth`` was dropped out from the model. Muralidharan's findings and mine are pretty similar in suggesting that the Ideal, Premium, and Very Good types of cut would bring profits, whereas Fair cut and I1 clarity would not.
+
+## References
+
+Sindiri V. (2020, June 16). Diamond price prediction based on their cut, colour, clarity, price with PyTorch.
+https://towardsdatascience.com/diamond-price-prediction-based-on-their-cut-colour-clarity-price-with-pytorch-1e0353d2503b
+
+Muralidharan N. Linear Regression
+
+# Appendix
+
+## 1. Organise the data for analysis
+
+```{r}
+data <- read.csv('cubicz.csv')
+cubiz <- data[,-1]
+head(cubiz)
+str(cubiz)
+summary(cubiz)
+```
+
+```{r}
+# remove NA
+cubiz <- cubiz[!is.na(cubiz$depth),]
+summary(cubiz)
+
+library(forcats)
+
+cubiz$cut <- factor(cubiz$cut, levels = c('Fair', 'Good', 'Very Good', 'Premium',
+                                  'Ideal'))
+cubiz$color <- factor(cubiz$color)
+cubiz$clarity <- factor(cubiz$clarity, levels = c('IF', 'VVS1', 'VVS2', 'VS1',
+                                          'VS2', 'SI1', 'SI2', 'I1'))
+
+str(cubiz)
+summary(cubiz)
+```
+
+## 2.	EDA
+
+```{r}
+library(dplyr)
+library(psych)
+
+cubiz%>%
+  dplyr::select(where(is.numeric))%>%
+  pairs.panels(method='spearman', hist.col='lightpink', density=TRUE,
+              ellipse=FALSE)
+```
+
+```{r}
+library(ggplot2)
+
+ggplot(cubiz,aes(x=cut, y=price)) + geom_boxplot()
+ggplot(cubiz,aes(x=color, y=price)) + geom_boxplot()
+ggplot(cubiz,aes(x=clarity, y=price)) + geom_boxplot()
+```
+
+```{r}
+library(pander)
+
+#By cut
+cut_price <- cubiz %>% select(cut, price)
+
+pander(cut_price %>%
+  group_by(cut) %>%
+  summarise(
+    MaxPriceByCut = max(price),
+    MedianPriceByCut = median(price),
+    AveragePriceByCut = mean(price),
+    MinPriceByCut = min(price)
+  ) %>%
+  arrange(cut))
+
+#By clarity
+clarity_price <- cubiz %>% select(clarity, price)
+
+pander(clarity_price %>%
+  group_by(clarity) %>%
+  summarise(
+    MaxPriceByClarity = max(price),
+    MedianPriceByClarity = median(price),
+    AveragePriceByClarity = mean(price),
+    MinPriceByClarity = min(price)
+  ) %>%
+  arrange(clarity))
+  
+#By color
+color_price <- cubiz %>% select(color, price)
+
+pander(color_price %>%
+  group_by(color) %>%
+  summarise(
+    MaxPriceByColor = max(price),
+    MedianPriceByColor = median(price),
+    AveragePriceByColor = mean(price),
+    MinPriceByColor = min(price)
+  ) %>%
+  arrange(color))
+```
+
+## 3.	Fitting linear model with no interactions
+
+```{r}
+fit1 <- lm(price ~ carat + cut + color + clarity + depth + table + x + y + z,
+           data=cubiz)
+```
+
+## 4.	 Summary from fit1 above
+
+```{r}
+summ.fit1 <- summary(fit1)
+Rsq<-summ.fit1$r.squared
+AdjRsq<-summ.fit1$adj.r.squared
+fit0 <- lm(price~1, data=cubiz)
+lrt.fit1 <- anova(fit0, fit1)
+Fval <- lrt.fit1$F[2]
+pval <- lrt.fit1$`Pr(>F)`[2]
+Statistic <- c("F-statistic", "p-value", "R-squared","Adj. R-squared")
+Value <- c(Fval,pval,Rsq,AdjRsq)
+fit1.res <- data.frame(Statistic,Value)
+
+pander(fit1.res, digits=4,caption="Model assessment summary")
+```
+
+## 5.	Check the regression assumptions for this initial model
+
+```{r}
+par(mfrow=c(2,2))
+plot(fit1)
+```
+
+```{r}
+# log transformation
+fit2 <- lm(log(price) ~ carat + cut + color + clarity + depth + table + x + y + z, 
+           data=cubiz)
+
+# re-check assumptions
+par(mfrow=c(2,2))
+plot(fit2)
+```
+
+```{r}
+#remove newly appear influential points
+HighLeverage <- cooks.distance(fit2) > (4/nrow(cubiz))
+LargeResiduals <- rstudent(fit2) > 3
+new_cubiz <- cubiz[!HighLeverage & !LargeResiduals,]
+
+fit3 <- lm(log(price) ~ carat + cut + color + clarity + depth + table + x + y + z,
+           data=new_cubiz)
+
+# function to create Rsq and AdjRsq summary table
+compare_rsq_summary <- function(Rsq1, AdjRsq1, Rsq2, AdjRsq2, table_name)
+{
+  Rsq1 <- Rsq1
+  Rsq2 <- Rsq2
+  AdjRsq1 <- AdjRsq1
+  AdjRsq2 <- AdjRsq2
+  Statistic <- c('R-squared', 'Adjusted R-squared')
+  Model.fit1 <- c(Rsq1, AdjRsq1)
+  Model.fit2 <- c(Rsq2, AdjRsq2)
+  mod.summ <- data.frame(Statistic, Model.fit1, Model.fit2)
+  names(mod.summ) <- c("Statistic", "Previous Model",
+                       "New Model")
+  pander(mod.summ, digits=5, caption = table_name)
+}
+
+compare_rsq_summary(0.9208, 0.9207, 0.9857, 0.9857,
+                    "Model comparison between with and without influential points")
+
+par(mfrow=c(2,2))
+plot(fit3)
+```
+
+```{r}
+# remove influential point #26339
+HighLeverage <- cooks.distance(fit3) > (4/nrow(cubiz))
+LargeResiduals <- rstudent(fit3) > 3
+new_cubiz2 <- new_cubiz[!HighLeverage & !LargeResiduals,]
+
+#fit the model without the influential point #26339 and others
+new_fit3 <- lm(log(price) ~ carat + cut + color + clarity + depth + table + x + y + z,
+           data=new_cubiz2)
+
+compare_rsq_summary(0.9857, 0.9857, 0.9883, 0.9883,
+                    "Model comparison between with and without influential points (cont.)")
+
+#plot again to see if the point has been removed and if there is any more influential points appear
+par(mfrow=c(2,2))
+plot(new_fit3)
+```
+
+### 5.1 Hypothesis test
+
+```{r}
+# use Anderson-Darling normality test
+library(nortest)
+pander(ad.test(new_fit3$res))
+
+# apply Shapiro test to only first 5000 observations
+new_cubiz3 <- new_cubiz2[1:5000,]
+fit.cubiz <- lm(log(price) ~ carat + cut + color + clarity + depth + table + x + y + z,
+           data=new_cubiz3)
+pander(shapiro.test(fit.cubiz$res))
+```
+```{r}
+# Breusch-Pagan test
+library(lmtest)
+pander(bptest(new_fit3))
+```
+
+### 5.2 Check multicollinearity
+
+```{r}
+library(car)
+library(knitr)
+pander(car::vif(new_fit3), digits=2, caption='VIF values')
+
+# remove y and z
+new_cubiz2$y <- NULL
+new_cubiz2$z <- NULL
+
+# fit new model without y and z
+fit4 <- lm(log(price) ~ carat + cut + color + clarity + depth + table + x,
+           data=new_cubiz2)
+
+pander(car::vif(fit4), digits=2, caption='VIF values')
+
+compare_rsq_summary(0.9883, 0.9883, 0.9879, 0.9879,
+                    "Model comparison between incl. and excl. Width and Height")
+```
+
+## 6.	Interactions, transformations and smooth term
+
+### 6.1 Plot residuals against each of the predictor
+
+```{r}
+library(broom)
+
+fit4 <- lm(log(price) ~ carat + cut + color + clarity + depth + table + x,
+           data=new_cubiz2) %>%
+  augment()
+a<-ggplot(fit4, aes(x=carat, y=.std.resid)) +
+  geom_point() + geom_smooth(method=NULL) +
+  labs(x='Carat', y='Residuals') +
+  theme_bw()
+b<-ggplot(fit4, aes(x=depth, y=.std.resid)) +
+  geom_point() + geom_smooth(method=NULL) +
+  labs(x='Depth', y='Residuals') +
+  theme_bw()
+c<-ggplot(fit4, aes(x=table, y=.std.resid)) +
+  geom_point() + geom_smooth(method=NULL) +
+  labs(x='Table', y='Residuals') +
+  theme_bw()
+d<-ggplot(fit4, aes(x=x, y=.std.resid)) +
+  geom_point() + geom_smooth(method=NULL) +
+  labs(x='Z', y='Residuals') +
+  theme_bw()
+library(gridExtra)
+grid.arrange(a,b,c,d, nrow=2)
+
+# plot log(price) against each of these 2 predictors
+
+names(fit4)[2] <- "log.price"
+
+aa <- ggplot(fit4, aes(x=carat, y=log.price)) +
+  geom_point() + geom_smooth(method=NULL) +
+  labs(x='carat', y='log(price)') +
+  theme_bw()
+dd <- ggplot(fit4, aes(x=x, y=log.price)) +
+  geom_point() + geom_smooth(method=NULL) +
+  labs(x='length (x)', y='log(price)') +
+  theme_bw()
+grid.arrange(aa,dd, nrow=1)
+```
+
+### 6.2 Predictor transformation
+
+```{r}
+fit5 <- lm(log(price) ~ poly(carat, 2) + cut + color + clarity + depth + table + poly(x, 2),
+                   data=new_cubiz2)
+
+compare_rsq_summary(0.9879, 0.9879, 0.9890, 0.9890, 
+                    "Model comparison between before and after predictors transformation")
+
+par(mfrow=c(2,2))
+plot(fit5)
+```
+
+### 6.3 Interaction term
+
+```{r}
+library(interactions)
+fit6 <- lm(log(price) ~ poly(carat, 2) + cut + color + clarity + depth + table + poly(x, 2) + carat:x,
+           data=new_cubiz2)
+
+interact_plot(fit6, pred=carat, modx=x,
+                 modx.values = c(3,4,5,6,7,8,9,10), colors='Qual1')
+
+compare_rsq_summary(0.9890, 0.9890, 0.9891, 0.9891,
+                    "Model comparison between without and with interaction term")
+```
+
+### 6.4 Fit GAM
+
+```{r}
+library(mgcv)
+fit.gam <- gam(log(price) ~ s(carat) + cut + color + clarity + s(depth) + 
+                 s(table) + s(x), data=new_cubiz2, method="REML", select=T)
+
+plot(fit.gam, all.terms = TRUE,rug=TRUE,
+     pch=19, cex=0.65, scheme = 1, shade.col="lightblue", page=1)
+```
+
+### 6.5 GAM model checking
+
+```{r}
+par(mfrow=c(2,2))
+gam.check(fit.gam, k.rep=2000)
+```
+
+```{r}
+# GAM model with k=20
+fit.gam2 <- gam(log(price) ~ s(carat, k=20) + cut + color + clarity + s(depth, k=20) + 
+                 s(table, k=20) + s(x, k=20), data=new_cubiz2, method="REML", select=T)
+
+par(mfrow=c(2,2))
+gam.check(fit.gam2, k.rep=2000)
+
+sum.gam <- summary(fit.gam)
+sum.gam2 <- summary(fit.gam2)
+
+gam_edf_carat <- sum.gam$edf[1]
+gam_edf_depth <- sum.gam$edf[2]
+gam_edf_table <- sum.gam$edf[3]
+gam_edf_x <- sum.gam$edf[4]
+gam2_edf_carat <- sum.gam2$edf[1]
+gam2_edf_depth <- sum.gam2$edf[2]
+gam2_edf_table <- sum.gam2$edf[3]
+gam2_edf_x <- sum.gam2$edf[4]
+
+Predictors <- c("s(carat)", "s(depth)", "s(table)","s(x)")
+Model.GAM <- c(gam_edf_carat, gam_edf_depth, gam_edf_table, gam_edf_x)
+Model.GAM2 <- c(gam2_edf_carat, gam2_edf_depth, gam2_edf_table, gam2_edf_x)
+mod.summary <- data.frame(Predictors, Model.GAM, Model.GAM2)
+names(mod.summary) <- c("Predictors", "Model fit.gam (k=9)", "Model fit.gam2 (k=20)")
+
+pander(mod.summary, digits=3,caption="Model comparison between k = 9 and k = 20")
+```
+
+## 7.	Simplify the model in stage: model selection
+
+### 7.1 AIC for Linear Model
+
+```{r}
+fit6 <- lm(log(price) ~ poly(carat, 2) + cut + color + clarity + depth + table + poly(x, 2) + carat:x,
+           data=new_cubiz2)
+
+step(fit6, direction="both")
+
+fit6.AIC.A <- -108771
+fit6.AIC.B <- -108850
+fit6.AIC.difference <- fit6.AIC.A - fit6.AIC.B
+fit6.AIC.difference
+```
+
+### 7.2 BIC for Linear Model
+
+```{r}
+step(fit6, direction="both", k=log(nrow(new_cubiz2)))
+
+fit6.BIC.A <- -108577
+fit6.BIC.B <- -108647
+fit6.BIC.difference <- fit6.BIC.A - fit6.BIC.B
+fit6.BIC.difference
+```
+
+### 7.3 Mallow's Cp for Linear Model
+
+```{r}
+par(mfrow=c(1,1))
+
+library(leaps)
+x <- model.matrix(fit6)[,-1]
+y <- log(new_cubiz2$price)
+models <- leaps(x,y)
+library(faraway)
+Cpplot(models)
+
+#find the lowest Cp position in the output
+idx <- which(models$Cp == min(models$Cp))
+cols_to_filter <- models$which[idx,]
+winner <- x[idx,]
+pander(filter(as.data.frame(winner), cols_to_filter), caption = "Chosen predictors by Mallow's Cp")
+```
+
+### 7.4 Model selection for GAM
+
+```{r}
+fit.gam2 <- gam(log(price) ~ s(carat, k=20) + cut + color + clarity + s(depth, k=20) + 
+                 s(table, k=20) + s(x, k=20), data=new_cubiz2, method="REML", select=T)
+summary(fit.gam2)
+```
+
+### 7.6 Fit LM using GAM
+
+```{r}
+library(mgcv)
+fit6.lm <- gam(log(price) ~ poly(carat, 2) + cut + color + clarity + depth + table + poly(x, 2) + carat:x,
+               data=new_cubiz2, method="REML")
+```
+
+### 7.7 Comparing AIC & BIC between Linear Model and GAM
+
+```{r}
+pander(AIC(fit6.lm, fit.gam2), caption="")
+pander(BIC(fit6.lm, fit.gam2), caption="")
+```
+
+## 8. Using cross-validation to avoid over-fitting
+
+```{r}
+predict.regsubsets <- function(object,newdata,id,...){
+  form <- as.formula(object$call[[2]])
+  mat <- model.matrix(form,newdata)
+  coefi <- coef(object,id=id)
+  xvars <- names(coefi)
+  mat[,xvars]%*%coefi
+}
+
+k <- 10
+set.seed(123)
+folds <- sample(1:k, nrow(new_cubiz2), replace=TRUE)
+cv.errors <- matrix(NA,k,21, dimnames=list(NULL,paste(1:21)))
+
+for(j in 1:k) {
+  best.fit <- regsubsets(price~.,data=new_cubiz2[folds!=j, ],nvmax=21)
+  
+  for(i in 1:21) {
+    pred <- predict.regsubsets(best.fit,new_cubiz2[folds==j,],id=i)
+    cv.errors[j,i] <- mean((new_cubiz2$price[folds==j]-pred)^2)
+  }
+}
+
+mean.cv.errors <- apply(cv.errors,2,mean)
+pander(mean.cv.errors, caption="Number of predictors and corresponding test MSE")
+which.min(mean.cv.errors)
+
+par(mfrow=c(1,1))
+plot(mean.cv.errors, type="b", xlab="Number of predictors", ylab="Test MSE")
+
+reg.best <- regsubsets(price~.,data=new_cubiz2 ,nvmax=21)
+coef(reg.best,21)
+```
+
+## 9. Shrinkage methods
+
+### 9.1 Ridge regression with cross-validation
+
+```{r}
+set.seed(123)
+
+# split 80% of the data to train dataset and 20% to test dataset
+train_index <- sample(length(new_cubiz2$carat), length(new_cubiz2$carat)*0.8)
+train <- new_cubiz2[train_index,]
+test <- new_cubiz2[-train_index,]
+x_train <- model.matrix(price~.,train)[,c(-1)]
+y_train <- train$price
+x_test <- model.matrix(price~.,test)[,c(-1)]
+y_test <- test$price
+```
+
+```{r}
+library(glmnet)
+cv.out.ridge <- cv.glmnet(x_train,y_train,alpha=0)
+plot(cv.out.ridge)
+```
+
+```{r}
+# expand the range of plot
+grid <- 10^seq(10,-2,length=100)
+
+cv.out.ridge <- cv.glmnet(x_train,y_train, alpha=0, lambda=grid)
+
+plot(cv.out.ridge)
+```
+
+```{r}
+bestlam.ridge <- cv.out.ridge$lambda.min
+bestlam.ridge
+log(bestlam.ridge)
+
+out.ridge <- glmnet(x_train,y_train,alpha=0)
+predict(out.ridge,type="coefficients",s=bestlam.ridge)
+
+lam1se.ridge <- cv.out.ridge$lambda.1se
+lam1se.ridge
+log(lam1se.ridge)
+
+predict(out.ridge,type="coefficients",s=lam1se.ridge)
+```
+
+```{r}
+# test error
+pred_ridge <- predict(out.ridge, s = bestlam.ridge, newx = x_test)
+mse_ridge <- mean((pred_ridge - y_test)^2)
+mse_ridge
+```
+### 9.2 LASSO regression with cross-validation
+
+```{r}
+cv.out.lasso=cv.glmnet(x_train,y_train,alpha=1)
+plot(cv.out.lasso)
+
+bestlam.lasso <- cv.out.lasso$lambda.min
+bestlam.lasso
+log(bestlam.lasso)
+
+out.lasso <- glmnet(x_train,y_train,alpha=1)
+predict(out.lasso,type="coefficients",s=bestlam.lasso)
+
+lam1se.lasso <- cv.out.lasso$lambda.1se
+lam1se.lasso
+log(lam1se.lasso)
+
+predict(out.lasso,type="coefficients",s=lam1se.lasso)
+```
+
+```{r}
+pred_lasso <- predict(out.lasso, s=bestlam.lasso, newx=x_test)
+mse_lasso <- mean((pred_lasso - y_test)^2)
+mse_lasso
+```
+```{r}
+Methods <- c("Ridge regression", "Cross-validation", "LASSO regression")
+TestMSE <- c(mse_ridge, min(mean.cv.errors), mse_lasso)
+testMSE_sum <- data.frame(Methods, TestMSE)
+
+pander(testMSE_sum,caption="Prediction settings comparison")
+
+```
+
+## 10. Models summary
+
+```{r}
+# fit1
+summary(fit1)
+# fit2
+pander(summary(fit2))
+# fit3
+pander(summary(fit3))
+# fit3_new
+pander(summary(new_fit3))
+# fit4.org
+fit4.org <- lm(log(price) ~ carat + cut + color + clarity + depth + table + x,
+           data=new_cubiz2)
+pander(summary(fit4.org))
+# fit5
+pander(summary(fit5))
+# fit6
+pander(summary(fit6))
+# fit.gam
+summary(fit.gam)
+# fit.gam2
+summary(fit.gam2)
+# fit6.lm
+summary(fit6.lm)
+```
+
+# 11. Coefficients calulation
+
+```{r}
+# using fit.gam2
+# cut Ideal
+exp(0.137290)
+proportional.change.Ideal <- exp(0.137290) - 1
+proportional.change.Ideal
+# cut Premium
+exp(0.105691)
+proportional.change.Premium <- exp(0.105691) - 1
+proportional.change.Premium
+# color J
+exp(-0.516728)
+proportional.change.J <- exp(-0.516728) - 1
+proportional.change.J
+# color G
+exp(-0.155312)
+proportional.change.G <- exp(-0.155312) - 1
+proportional.change.G
+# clarity I1
+exp(-1.051384)
+proportional.change.I1 <- exp(-1.051384) - 1
+proportional.change.I1
+# clarity VS1
+exp(-0.265580)
+proportional.change.VS1 <- exp(-0.265580) - 1
+proportional.change.VS1
+```
+
