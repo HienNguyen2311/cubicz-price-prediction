@@ -1,1 +1,1 @@
-# cubicz-price-prediction
+# Cubic Zirconia Price Prediction and Analysis
