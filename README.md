@@ -24,6 +24,17 @@ Kaggle: https://www.kaggle.com/datasets/colearninglounge/gemstone-price-predicti
 ## Libraries Used
 dplyr, ggplot2, psych, car, mgcv, leaps, glmnet
 ## Sample Visualizations
+Scatterplot matrix
+
+![project scatterplot matrix](https://github.com/user-attachments/assets/e50e07cc-a7b8-4b05-a7be-970cb50b6075)
+
+Regression assumption check
+
+![check regression assumptions plot before](https://github.com/user-attachments/assets/9fd0dc4d-2627-44e7-b695-cc663e89164b)
+
+Resdiuals vs ppredictors
+
+![project residuals vs predictos](https://github.com/user-attachments/assets/c48d0a33-3b38-4504-9333-c751777690e8)
 
 ## License
 This project is licensed under the MIT License.
